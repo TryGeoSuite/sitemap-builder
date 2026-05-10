@@ -16,9 +16,10 @@
 
 import http from 'node:http';
 import https from 'node:https';
+import { loadRobotsChecker } from './robots.js';
 
 const DEFAULT_USER_AGENT =
-  'geosuite-sitemap-builder/0.1.0 (+https://trygeosuite.it)';
+  'geosuite-sitemap-builder/0.3.0 (+https://trygeosuite.it)';
 
 const DEFAULT_TIMEOUT_MS = 8_000;
 const DEFAULT_MAX_PAGES = 200;
@@ -54,6 +55,8 @@ const HREF_RE = /<a\b[^>]*\bhref\s*=\s*["']([^"']+)["']/gi;
  * @property {number} [perPageTimeoutMs]
  * @property {number} [deadlineMs]   Wall-clock time (Date.now() + budget).
  * @property {string} [userAgent]
+ * @property {boolean} [respectRobots]  When true, fetch /robots.txt and skip
+ *   paths disallowed for User-Agent *.
  */
 
 /**
@@ -75,10 +78,15 @@ export async function crawlSite(startUrl, opts = {}) {
   const deadline = opts.deadlineMs ?? Number.POSITIVE_INFINITY;
   const userAgent = opts.userAgent ?? DEFAULT_USER_AGENT;
 
+  const isAllowed = opts.respectRobots
+    ? await loadRobotsChecker(origin, { timeoutMs, userAgent })
+    : () => true;
+
   /** @type {Map<string, CrawledPage>} */
   const visited = new Map();
   /** @type {{ url: string, depth: number }[]} */
-  const queue = [{ url: start.href, depth: 0 }];
+  const startPath = start.pathname || '/';
+  const queue = isAllowed(startPath) ? [{ url: start.href, depth: 0 }] : [];
   let hitCap = false;
   let hitDeadline = false;
 
@@ -115,6 +123,8 @@ export async function crawlSite(startUrl, opts = {}) {
           if (job.depth >= maxDepth) continue;
           for (const link of extractInternalLinks(result.body, job.url, origin)) {
             if (visited.has(link)) continue;
+            const linkPath = new URL(link).pathname;
+            if (!isAllowed(linkPath)) continue;
             queue.push({ url: link, depth: job.depth + 1 });
           }
         } catch {

@@ -8,6 +8,9 @@
 >
 > Maintained by [GeoSuite](https://trygeosuite.it).
 
+[![CI](https://github.com/TryGeoSuite/sitemap-builder/actions/workflows/ci.yml/badge.svg)](https://github.com/TryGeoSuite/sitemap-builder/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/@geosuite/sitemap-builder.svg)](https://www.npmjs.com/package/@geosuite/sitemap-builder)
+[![npm downloads](https://img.shields.io/npm/dm/@geosuite/sitemap-builder.svg)](https://www.npmjs.com/package/@geosuite/sitemap-builder)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 ---

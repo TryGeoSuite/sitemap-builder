@@ -16,6 +16,9 @@
 //   --ai                 (0.2+) Classify pages by category in the JSON
 //                        output using an LLM. Requires OPENAI_API_KEY or
 //                        ANTHROPIC_API_KEY. No effect on XML output.
+//   --respect-robots     (0.3+) Fetch /robots.txt and skip paths disallowed
+//                        for User-Agent: *. Off by default because you
+//                        typically crawl your own site.
 //   --help               Show this message
 //
 // Exit codes: 0 on success, 1 on usage / network error.
@@ -42,6 +45,8 @@ Options:
   --ai                 (0.2+) When combined with --json, group pages by
                        category using an LLM. Needs OPENAI_API_KEY or
                        ANTHROPIC_API_KEY. No effect on XML output.
+  --respect-robots     (0.3+) Honour /robots.txt for User-Agent *.
+                       Off by default (most users crawl their own site).
   --help               Show this message
 `;
 
@@ -52,17 +57,28 @@ function parseArgs(argv) {
     const a = argv[i++];
     if (a === '--help' || a === '-h') return { help: true };
     if (a.startsWith('--')) {
-      const value = argv[i++];
-      if (a === '--max-pages') args.opts.maxPages = Number(value);
-      else if (a === '--max-depth') args.opts.maxDepth = Number(value);
-      else if (a === '--concurrency') args.opts.concurrency = Number(value);
-      else if (a === '--timeout-ms') args.opts.perPageTimeoutMs = Number(value);
-      else if (a === '--budget-s') args.opts.deadlineMs = Date.now() + Number(value) * 1000;
-      else if (a === '--output') args.output = value;
-      else if (a === '--json') { args.json = true; i--; }
-      else if (a === '--user-agent') args.opts.userAgent = value;
-      else if (a === '--ai') { args.ai = true; i--; }
-      else throw new Error(`Unknown option: ${a}`);
+      let key = a;
+      let value;
+      const eq = a.indexOf('=');
+      const inline = eq > 0;
+      if (inline) {
+        key = a.slice(0, eq);
+        value = a.slice(eq + 1);
+      }
+      if (key === '--json') { args.json = true; continue; }
+      if (key === '--ai') { args.ai = true; continue; }
+      if (key === '--respect-robots') { args.respectRobots = true; continue; }
+      if (!inline) value = argv[i++];
+      if (value === undefined) throw new Error(`Missing value for ${key}`);
+      if (key === '--max-pages') args.opts.maxPages = Number(value);
+      else if (key === '--max-depth') args.opts.maxDepth = Number(value);
+      else if (key === '--concurrency') args.opts.concurrency = Number(value);
+      else if (key === '--timeout-ms') args.opts.perPageTimeoutMs = Number(value);
+      else if (key === '--budget-s') args.opts.deadlineMs = Date.now() + Number(value) * 1000;
+      else if (key === '--output') args.output = value;
+      else if (key === '--user-agent') args.opts.userAgent = value;
+      else throw new Error(`Unknown option: ${key}`);
+
     } else if (!args.url) {
       args.url = a;
     } else {
@@ -88,6 +104,7 @@ async function main() {
   if (parsed.opts.deadlineMs === undefined) {
     parsed.opts.deadlineMs = Date.now() + 60_000;
   }
+  if (parsed.respectRobots) parsed.opts.respectRobots = true;
 
   let result;
   try {

@@ -1,6 +1,6 @@
 {
   "name": "@geosuite/sitemap-builder",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Crawl a website and emit a valid sitemap.xml — for sites that ship without one or whose CMS pipeline forgot to.",
   "type": "module",
   "license": "MIT",
@@ -44,7 +44,8 @@
   ],
   "scripts": {
     "lint": "node --check src/index.js && node --check src/crawler.js && node --check src/sitemap.js && node --check src/ai.js && node --check bin/cli.js && node --check test/test-sitemap.js && node --check test/test-crawler.js && node --check test/test-ai.js",
-    "test": "node --test test/*.js"
+    "test": "node --test test/*.js",
+    "coverage": "node --experimental-test-coverage --test test/*.js"
   },
   "engines": {
     "node": ">=20"
