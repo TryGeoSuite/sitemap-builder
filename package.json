@@ -1,0 +1,48 @@
+{
+  "name": "@geosuite/sitemap-builder",
+  "version": "0.2.0",
+  "description": "Crawl a website and emit a valid sitemap.xml — for sites that ship without one or whose CMS pipeline forgot to.",
+  "type": "module",
+  "license": "MIT",
+  "author": "GeoSuite (https://trygeosuite.it)",
+  "homepage": "https://github.com/geosuite/sitemap-builder#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/geosuite/sitemap-builder.git"
+  },
+  "bugs": {
+    "url": "https://github.com/geosuite/sitemap-builder/issues"
+  },
+  "keywords": [
+    "sitemap",
+    "sitemap.xml",
+    "crawler",
+    "seo",
+    "geo",
+    "generative-engine-optimization",
+    "llmstxt"
+  ],
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "bin": {
+    "geosuite-sitemap-builder": "bin/cli.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "examples",
+    "assets",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "lint": "node --check src/index.js && node --check src/crawler.js && node --check src/sitemap.js && node --check src/ai.js && node --check bin/cli.js && node --check test/test-sitemap.js && node --check test/test-crawler.js && node --check test/test-ai.js",
+    "test": "node --test test/*.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
