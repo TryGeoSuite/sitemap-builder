@@ -1,6 +1,6 @@
 {
   "name": "@geosuite/sitemap-builder",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Crawl a website and emit a valid sitemap.xml — for sites that ship without one or whose CMS pipeline forgot to.",
   "type": "module",
   "license": "MIT",
