@@ -9,7 +9,7 @@ the boring core?".
 ## Setup
 
 ```bash
-git clone https://github.com/geosuite/sitemap-builder.git
+git clone https://github.com/TryGeoSuite/sitemap-builder.git
 cd sitemap-builder
 # no install step — the project has no runtime dependencies.
 node bin/cli.js https://example.com

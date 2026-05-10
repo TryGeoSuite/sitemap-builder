@@ -8,13 +8,13 @@
   "contributors": [
     "Matteo Perino <matte97.p@gmail.com> (https://github.com/matte97p)"
   ],
-  "homepage": "https://github.com/geosuite/sitemap-builder#readme",
+  "homepage": "https://github.com/TryGeoSuite/sitemap-builder#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/geosuite/sitemap-builder.git"
+    "url": "git+https://github.com/TryGeoSuite/sitemap-builder.git"
   },
   "bugs": {
-    "url": "https://github.com/geosuite/sitemap-builder/issues"
+    "url": "https://github.com/TryGeoSuite/sitemap-builder/issues"
   },
   "keywords": [
     "sitemap",

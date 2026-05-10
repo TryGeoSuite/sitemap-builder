@@ -193,9 +193,9 @@ turn it on against URLs you wouldn't paste into their UI.
 maintain to make Generative Engine Optimization (GEO) measurable from
 the terminal:
 
-- [`@geosuite/ai-crawler-bots`](https://github.com/geosuite/ai-crawler-bots) — curated AI bot user-agent list with a CLI that tells you whether GPTBot, ClaudeBot, PerplexityBot and friends can read your site and where the block came from.
-- [`@geosuite/schema-templates`](https://github.com/geosuite/schema-templates) — copy-paste-ready schema.org JSON-LD templates with a local validator.
-- [`@geosuite/llms-txt-generator`](https://github.com/geosuite/llms-txt-generator) — turn a `sitemap.xml` into the `llms.txt` standard from [llmstxt.org](https://llmstxt.org/).
+- [`@geosuite/ai-crawler-bots`](https://github.com/TryGeoSuite/ai-crawler-bots) — curated AI bot user-agent list with a CLI that tells you whether GPTBot, ClaudeBot, PerplexityBot and friends can read your site and where the block came from.
+- [`@geosuite/schema-templates`](https://github.com/TryGeoSuite/schema-templates) — copy-paste-ready schema.org JSON-LD templates with a local validator.
+- [`@geosuite/llms-txt-generator`](https://github.com/TryGeoSuite/llms-txt-generator) — turn a `sitemap.xml` into the `llms.txt` standard from [llmstxt.org](https://llmstxt.org/).
 
 The same checks are also surfaced as a hosted product at
 [trygeosuite.it](https://trygeosuite.it) for teams who want history,
