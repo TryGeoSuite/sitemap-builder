@@ -4,9 +4,10 @@
   "description": "Crawl a website and emit a valid sitemap.xml — for sites that ship without one or whose CMS pipeline forgot to.",
   "type": "module",
   "license": "MIT",
-  "author": "GeoSuite (https://trygeosuite.it)",
+  "author": "Matteo Perino <matte97.p@gmail.com> (https://github.com/matte97p)",
   "contributors": [
-    "Matteo Perino <matte97.p@gmail.com> (https://github.com/matte97p)"
+    "Matteo Perino <matte97.p@gmail.com> (https://github.com/matte97p)",
+    "GeoSuite (https://trygeosuite.it)"
   ],
   "homepage": "https://github.com/TryGeoSuite/sitemap-builder#readme",
   "repository": {

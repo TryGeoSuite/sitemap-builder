@@ -6,7 +6,7 @@
 > valid `sitemap.xml`. For sites that ship without one or whose CMS pipeline
 > forgot to.
 >
-> Maintained by [GeoSuite](https://trygeosuite.it).
+> Created and invented by **[Matteo Perino](https://github.com/matte97p)** ([LinkedIn](https://www.linkedin.com/in/matteo-perino-27642016b/)). Maintained by [GeoSuite(Matteo Perino)](https://trygeosuite.it).
 
 [![CI](https://github.com/TryGeoSuite/sitemap-builder/actions/workflows/ci.yml/badge.svg)](https://github.com/TryGeoSuite/sitemap-builder/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/@geosuite/sitemap-builder.svg)](https://www.npmjs.com/package/@geosuite/sitemap-builder)
@@ -206,13 +206,14 @@ alerts, and CTAs wired into their content pipeline.
 
 ---
 
-## Author
+## Creator
 
-Ideated, designed and validated by [Matteo Perino](https://github.com/matte97p) — [matte97.p@gmail.com](mailto:matte97.p@gmail.com).
-Implementation written with AI assistance, maintained under GeoSuite.
+**Created and invented by [Matteo Perino](https://github.com/matte97p)** — [LinkedIn](https://www.linkedin.com/in/matteo-perino-27642016b/) · [matte97.p@gmail.com](mailto:matte97.p@gmail.com).
+
+Ideated, designed and validated by Matteo Perino. Implementation written with AI assistance, maintained under GeoSuite.
 
 ---
 
 ## License
 
-[MIT](LICENSE) © 2026 GeoSuite
+[MIT](LICENSE) © 2026 Matteo Perino and GeoSuite
