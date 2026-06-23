@@ -1,0 +1,10 @@
+name = "sitemap-builder"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+# No nodejs_compat / npm install needed: the Worker reuses only the pure
+# renderSitemapXml() from ../src/sitemap.js and crawls with the platform fetch.
+#
+# ⚠️ Deploy to your PERSONAL / GeoSuite Cloudflare account — NOT the work/Cato
+# one (`wrangler whoami` to check). Pin it to be safe:
+# account_id = "<your-personal-cloudflare-account-id>"

@@ -1,0 +1,39 @@
+name: Deploy web tool
+
+# Auto-deploys the hosted sitemap builder (web/) to Cloudflare Workers on every
+# push to `main` that touches the Worker or the code it reuses. Manual runs via
+# the Actions tab too.
+#
+# Requires two repo secrets (Settings → Secrets and variables → Actions):
+#   CLOUDFLARE_API_TOKEN   — token scoped "Edit Cloudflare Workers" from the
+#                            GeoSuite Cloudflare account (create a fresh, scoped one).
+#   CLOUDFLARE_ACCOUNT_ID  — that account's id.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - 'src/sitemap.js'
+      - '.github/workflows/deploy-web.yml'
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    # Don't run in forks (they won't have the secrets).
+    if: github.repository == 'TryGeoSuite/sitemap-builder'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Deploy Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: web
+          command: deploy

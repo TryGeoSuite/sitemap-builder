@@ -1,0 +1,10 @@
+node_modules/
+.wrangler/
+package-lock.json
+
+*.log
+npm-debug.log*
+
+.DS_Store
+.idea/
+.vscode/
