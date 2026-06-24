@@ -8,11 +8,25 @@
 // the CLI: `npx @geosuite/sitemap-builder <url>`.
 //
 // Routes:
-//   GET /                   → the page (web/page.js)
-//   GET /api/crawl?url=...    → { site, count, capped, xml, error }
+//   GET /                   → the page, locale from Accept-Language (it → Italian)
+//   GET /en  /it            → the page in that locale
+//   GET /api/crawl?url=...   → { site, count, capped, xml, error }
+//   GET /og.png  /favicon.svg → static assets
 
 import { renderSitemapXml } from '../src/sitemap.js';
-import { PAGE } from './page.js';
+import { renderPage } from './page.js';
+import OG_PNG from './og.png'; // bundled as ArrayBuffer via the wrangler "Data" rule
+
+// A geo "location pin" mark in the GeoSuite accent — inline SVG, no binary.
+const FAVICON = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#0b0f17"/><path d="M32 13c-8.3 0-15 6.4-15 14.6C17 38 32 51 32 51s15-13 15-23.4C47 19.4 40.3 13 32 13z" fill="#5b8def"/><circle cx="32" cy="27.5" r="5.6" fill="#0b0f17"/></svg>`;
+
+// '/it' → 'it', '/en' → 'en', '/' → first Accept-Language tag (it → 'it', else 'en').
+function pickLang(request, path) {
+  if (path === '/it') return 'it';
+  if (path === '/en') return 'en';
+  const first = (request.headers.get('accept-language') || '').split(',')[0].trim().toLowerCase();
+  return first.startsWith('it') ? 'it' : 'en';
+}
 
 const MAX_PAGES = 40;
 const MAX_DEPTH = 2;
@@ -98,8 +112,9 @@ const JSON_HEADERS = {
 export default {
   async fetch(request) {
     const url = new URL(request.url);
+    const path = url.pathname;
 
-    if (url.pathname === '/api/crawl') {
+    if (path === '/api/crawl') {
       const target = url.searchParams.get('url');
       if (!target) {
         return new Response(JSON.stringify({ error: 'Missing ?url= parameter.' }), {
@@ -110,10 +125,26 @@ export default {
       return new Response(JSON.stringify(await crawl(target)), { headers: JSON_HEADERS });
     }
 
-    if (url.pathname === '/') {
-      return new Response(PAGE, {
-        headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=3600' },
+    if (path === '/og.png') {
+      return new Response(OG_PNG, {
+        headers: { 'content-type': 'image/png', 'cache-control': 'public, max-age=86400' },
       });
+    }
+    if (path === '/favicon.svg') {
+      return new Response(FAVICON, {
+        headers: { 'content-type': 'image/svg+xml; charset=utf-8', 'cache-control': 'public, max-age=86400' },
+      });
+    }
+
+    if (path === '/' || path === '/en' || path === '/it') {
+      const lang = pickLang(request, path);
+      const headers = {
+        'content-type': 'text/html; charset=utf-8',
+        'cache-control': 'public, max-age=3600',
+      };
+      // '/' is content-negotiated, so it must not be cached language-agnostically.
+      if (path === '/') headers.vary = 'Accept-Language';
+      return new Response(renderPage(lang), { headers });
     }
 
     return new Response('Not found', { status: 404 });
