@@ -231,3 +231,9 @@ Also from the same author: [rlsgrid](https://github.com/matte97p/rlsgrid) · [pe
 ---
 
 ⭐ If `sitemap-builder` is useful, [give it a star](https://github.com/TryGeoSuite/sitemap-builder) — it helps other people find the toolkit.
+
+---
+
+## Built by GeoSuite
+
+This is part of the open-source toolkit behind **[GeoSuite](https://trygeosuite.it)** — the platform that measures and improves how AI engines (ChatGPT, Gemini, Claude, Perplexity) cite your brand. [Explore the platform →](https://trygeosuite.it)
