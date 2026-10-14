@@ -11,14 +11,26 @@
 //   GET /                   → the page, locale from Accept-Language (it → Italian)
 //   GET /en  /it            → the page in that locale
 //   GET /api/crawl?url=...   → { site, count, capped, xml, error }
-//   GET /og.png  /favicon.svg → static assets
+//   GET /og.png              → Open Graph share image
+//   GET /favicon.png  /favicon.ico  /favicon.svg  /apple-touch-icon.png
+//                            → GeoSuite's favicon (PNG; /favicon.svg is the old
+//                              path, kept so cached links still get an icon)
+//   GET /logos/{chatgpt,gemini,perplexity}.svg → engine logos for the CTA
 
 import { renderSitemapXml } from '../src/sitemap.js';
 import { renderPage } from './page.js';
 import OG_PNG from './og.png'; // bundled as ArrayBuffer via the wrangler "Data" rule
+// GeoSuite's official favicon (96px) and touch icon (180px): never redraw or recolor.
+import FAVICON_PNG from './favicon.png';
+import TOUCH_ICON_PNG from './apple-touch-icon.png';
+// The AI engines' logos in the closing call to action, copied from
+// TryGeoSuite/geo-toolkit/logos (bundled as text via the wrangler "Text" rule).
+import LOGO_CHATGPT from './logos/chatgpt.svg';
+import LOGO_GEMINI from './logos/gemini.svg';
+import LOGO_PERPLEXITY from './logos/perplexity.svg';
 
-// A geo "location pin" mark in the GeoSuite accent — inline SVG, no binary.
-const FAVICON = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#0b0f17"/><path d="M32 13c-8.3 0-15 6.4-15 14.6C17 38 32 51 32 51s15-13 15-23.4C47 19.4 40.3 13 32 13z" fill="#5b8def"/><circle cx="32" cy="27.5" r="5.6" fill="#0b0f17"/></svg>`;
+const ENGINE_LOGOS = { chatgpt: LOGO_CHATGPT, gemini: LOGO_GEMINI, perplexity: LOGO_PERPLEXITY };
+const ICON_PATHS = { '/favicon.png': FAVICON_PNG, '/favicon.ico': FAVICON_PNG, '/favicon.svg': FAVICON_PNG, '/apple-touch-icon.png': TOUCH_ICON_PNG };
 
 // '/it' → 'it', '/en' → 'en', '/' → first Accept-Language tag (it → 'it', else 'en').
 function pickLang(request, path) {
@@ -130,8 +142,14 @@ export default {
         headers: { 'content-type': 'image/png', 'cache-control': 'public, max-age=86400' },
       });
     }
-    if (path === '/favicon.svg') {
-      return new Response(FAVICON, {
+    if (Object.hasOwn(ICON_PATHS, path)) {
+      return new Response(ICON_PATHS[path], {
+        headers: { 'content-type': 'image/png', 'cache-control': 'public, max-age=86400' },
+      });
+    }
+    const logo = path.match(/^\/logos\/(chatgpt|gemini|perplexity)\.svg$/);
+    if (logo) {
+      return new Response(ENGINE_LOGOS[logo[1]], {
         headers: { 'content-type': 'image/svg+xml; charset=utf-8', 'cache-control': 'public, max-age=86400' },
       });
     }

@@ -2,10 +2,12 @@ name = "sitemap-builder"
 main = "worker.js"
 compatibility_date = "2025-01-01"
 
-# Bundle the OG share image (1200×630 PNG) as an ArrayBuffer the Worker serves
-# at /og.png — no external host, CSP-safe.
+# Bundle the PNGs (OG share image, favicon, touch icon) as ArrayBuffers the
+# Worker serves itself: no external host, CSP-safe.
 rules = [
-  { type = "Data", globs = ["**/*.png"], fallthrough = false }
+  { type = "Data", globs = ["**/*.png"], fallthrough = false },
+  # The AI engines' logos in the call to action, copied from geo-toolkit/logos.
+  { type = "Text", globs = ["**/*.svg"], fallthrough = false }
 ]
 
 # No nodejs_compat / npm install needed: the Worker reuses only the pure
