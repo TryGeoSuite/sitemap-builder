@@ -5,7 +5,8 @@ A [Cloudflare Worker](https://developers.cloudflare.com/workers/) that puts
 a sitemaps.org-compliant `sitemap.xml` to copy or download.
 
 - `GET /` — the page (`page.js`), bilingual **en/it** (auto-detected from `Accept-Language`; `/en` · `/it` force a locale)
-- `GET /og.png` · `GET /favicon.svg` — Open Graph share image (1200×630) + favicon
+- `GET /og.png` · `GET /favicon.png` (also `/favicon.ico`, `/favicon.svg`, `/apple-touch-icon.png`) — Open Graph share image (1200×630) + GeoSuite's favicon
+- `GET /logos/{chatgpt,gemini,perplexity}.svg` — engine logos for the call to action
 - `GET /api/crawl?url=https://example.com` — `{ site, count, capped, xml }`
 
 > ⚠️ **Capped edge version.** The crawl is a small BFS (≤40 pages, depth ≤2)
