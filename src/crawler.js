@@ -6,16 +6,27 @@
 //   - same-origin only (never wanders off the host)
 //   - User-Agent identifies the tool
 //   - small concurrency cap (caller decides)
-//   - per-page timeout via AbortController
+//   - per-page timeout via AbortSignal
 //   - hard time budget (caller-enforced via Date-based deadline)
 //   - skips obvious non-html / asset extensions
 //
 // `respectRobots` is opt-in: by default the tool runs against the site
 // owner's own domain so honoring robots.txt would silently strip the very
 // pages they want to publish. Public-facing crawls should flip it on.
+//
+// It uses the platform `fetch`, so the same code runs in the CLI (Node 20+)
+// and in the hosted Worker (web/worker.js). The GeoSuite platform crawls with
+// the same rules in Python (backend/services/tools/sitemap_builder_service.py);
+// both run the cases in test/fixtures/golden-sitemap.json:
+//   - redirects are followed and the page is listed at its final URL; when the
+//     start URL redirects to another host (example.com -> www.example.com) the
+//     crawl continues on that host;
+//   - only 2xx HTML pages go in the sitemap (a 404 or a PDF does not);
+//   - links are read from <a href> only, `&amp;` decoded, normalized (lowercase
+//     host, no default port, no fragment, percent-encoded) and followed in
+//     sorted order;
+//   - pages are listed by depth, then by URL (code-point order).
 
-import http from 'node:http';
-import https from 'node:https';
 import { loadRobotsChecker } from './robots.js';
 
 const DEFAULT_USER_AGENT =
@@ -25,6 +36,8 @@ const DEFAULT_TIMEOUT_MS = 8_000;
 const DEFAULT_MAX_PAGES = 200;
 const DEFAULT_MAX_DEPTH = 3;
 const DEFAULT_CONCURRENCY = 6;
+// Only the first 512 KB of a page are read for links and title.
+const MAX_BODY_CHARS = 512 * 1024;
 
 const ASSET_EXT = new Set([
   '.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.ico', '.bmp',
@@ -39,7 +52,7 @@ const HREF_RE = /<a\b[^>]*\bhref\s*=\s*["']([^"']+)["']/gi;
 
 /**
  * @typedef {Object} CrawledPage
- * @property {string} url        Final URL (after dropping hash).
+ * @property {string} url        Final URL (after redirects, without the hash).
  * @property {number} depth      BFS depth (0 = start URL).
  * @property {number} status     HTTP status code that returned this page.
  * @property {string|null} title HTML <title> if discovered.
@@ -57,36 +70,40 @@ const HREF_RE = /<a\b[^>]*\bhref\s*=\s*["']([^"']+)["']/gi;
  * @property {string} [userAgent]
  * @property {boolean} [respectRobots]  When true, fetch /robots.txt and skip
  *   paths disallowed for User-Agent *.
+ * @property {typeof fetch} [fetch]  Fetch implementation (tests pass a fake).
  */
 
 /**
  * Crawl an origin starting at `startUrl` and return discovered pages.
+ * A bare domain (`example.com`) is crawled over https.
  *
  * @param {string} startUrl
  * @param {CrawlOptions} [opts]
- * @returns {Promise<{ pages: CrawledPage[], hitCap: boolean, hitDeadline: boolean }>}
+ * @returns {Promise<{ origin: string, pages: CrawledPage[], hitCap: boolean, hitDeadline: boolean }>}
  */
 export async function crawlSite(startUrl, opts = {}) {
-  const start = normalizeUrl(startUrl);
+  const start = normalizeStartUrl(startUrl);
   if (!start) throw new Error(`Invalid start URL: ${startUrl}`);
 
-  const origin = `${start.protocol}//${start.host}`;
+  let origin = start.origin;
   const maxPages = clamp(opts.maxPages ?? DEFAULT_MAX_PAGES, 1, 1000);
   const maxDepth = clamp(opts.maxDepth ?? DEFAULT_MAX_DEPTH, 0, 6);
   const concurrency = clamp(opts.concurrency ?? DEFAULT_CONCURRENCY, 1, 16);
   const timeoutMs = opts.perPageTimeoutMs ?? DEFAULT_TIMEOUT_MS;
   const deadline = opts.deadlineMs ?? Number.POSITIVE_INFINITY;
   const userAgent = opts.userAgent ?? DEFAULT_USER_AGENT;
+  const doFetch = opts.fetch ?? fetch;
 
   const isAllowed = opts.respectRobots
-    ? await loadRobotsChecker(origin, { timeoutMs, userAgent })
+    ? await loadRobotsChecker(origin, { timeoutMs, userAgent, fetch: doFetch })
     : () => true;
 
-  /** @type {Map<string, CrawledPage>} */
-  const visited = new Map();
+  /** @type {Map<string, CrawledPage>} final URL -> page */
+  const pages = new Map();
+  /** URLs already fetched or queued for fetching (requested and final). */
+  const seen = new Set();
   /** @type {{ url: string, depth: number }[]} */
-  const startPath = start.pathname || '/';
-  const queue = isAllowed(startPath) ? [{ url: start.href, depth: 0 }] : [];
+  const queue = isAllowed(new URL(start.href).pathname) ? [{ url: start.href, depth: 0 }] : [];
   let hitCap = false;
   let hitDeadline = false;
 
@@ -98,7 +115,7 @@ export async function crawlSite(startUrl, opts = {}) {
   for (let i = 0; i < concurrency; i++) {
     workers.push((async () => {
       while (true) {
-        if (visited.size >= maxPages) { hitCap = true; return; }
+        if (pages.size >= maxPages) { hitCap = true; return; }
         if (Date.now() >= deadline) { hitDeadline = true; return; }
         const job = queue.shift();
         if (!job) {
@@ -106,29 +123,42 @@ export async function crawlSite(startUrl, opts = {}) {
           await sleep(20);
           continue;
         }
-        if (visited.has(job.url)) continue;
-        if (visited.size >= maxPages) { hitCap = true; return; }
+        if (seen.has(job.url)) continue;
+        seen.add(job.url);
 
         inFlight++;
         try {
-          const result = await fetchHtml(job.url, { timeoutMs, userAgent });
+          const result = await fetchHtml(job.url, { timeoutMs, userAgent, doFetch });
           if (!result) continue;
-          visited.set(job.url, {
-            url: job.url,
+          const finalUrl = normalizeUrl(result.url)?.href ?? job.url;
+          const finalOrigin = new URL(finalUrl).origin;
+          if (finalOrigin !== origin) {
+            // The start page may move the crawl to its canonical host
+            // (example.com -> www.example.com); any other page that leaves
+            // the site is dropped.
+            if (job.depth !== 0 || pages.size) continue;
+            origin = finalOrigin;
+          }
+          if (finalUrl !== job.url) {
+            if (seen.has(finalUrl)) continue;
+            seen.add(finalUrl);
+          }
+          if (!result.isHtml || pages.size >= maxPages) continue;
+          pages.set(finalUrl, {
+            url: finalUrl,
             depth: job.depth,
             status: result.status,
-            title: result.title,
-            lastModified: result.lastModified ?? null,
+            title: extractTitle(result.body),
+            lastModified: result.lastModified,
           });
           if (job.depth >= maxDepth) continue;
-          for (const link of extractInternalLinks(result.body, job.url, origin)) {
-            if (visited.has(link)) continue;
-            const linkPath = new URL(link).pathname;
-            if (!isAllowed(linkPath)) continue;
+          for (const link of extractInternalLinks(result.body, finalUrl, origin)) {
+            if (seen.has(link)) continue;
+            if (!isAllowed(new URL(link).pathname)) continue;
             queue.push({ url: link, depth: job.depth + 1 });
           }
         } catch {
-          // Per-page errors are swallowed — the crawler is best-effort.
+          // Per-page errors are swallowed: the crawler is best-effort.
         } finally {
           inFlight--;
         }
@@ -138,14 +168,14 @@ export async function crawlSite(startUrl, opts = {}) {
 
   await Promise.all(workers);
 
-  // Stable sort: depth asc, then path lexicographic. Mirrors the typical
+  // Stable sort: depth asc, then URL by code point. Mirrors the typical
   // "homepage first, then sections" ordering search engines prefer.
-  const pages = [...visited.values()].sort((a, b) => {
+  const sorted = [...pages.values()].sort((a, b) => {
     if (a.depth !== b.depth) return a.depth - b.depth;
-    return a.url.localeCompare(b.url);
+    return a.url < b.url ? -1 : a.url > b.url ? 1 : 0;
   });
 
-  return { pages, hitCap, hitDeadline };
+  return { origin, pages: sorted, hitCap, hitDeadline };
 }
 
 // --- helpers ---------------------------------------------------------------
@@ -159,8 +189,8 @@ function sleep(ms) {
 }
 
 /**
- * Strip the fragment, lowercase the host, drop trailing single slashes that
- * would otherwise dedupe weirdly. Keeps everything else intact.
+ * Strip the fragment, lowercase the host, drop a default port. The WHATWG URL
+ * parser also resolves dot segments and percent-encodes the path and query.
  *
  * @returns {URL | null}
  */
@@ -180,6 +210,22 @@ export function normalizeUrl(input) {
   }
 }
 
+/**
+ * The start URL as typed by a person: trimmed, `https://` added to a bare
+ * domain, and a host that is `localhost` or has a dot. Same rule as the
+ * platform's `_normalize_origin`.
+ *
+ * @returns {URL | null}
+ */
+export function normalizeStartUrl(input) {
+  const cleaned = String(input ?? '').trim();
+  if (!cleaned || /\s/.test(cleaned)) return null;
+  const u = normalizeUrl(cleaned.includes('://') ? cleaned : `https://${cleaned}`);
+  if (!u) return null;
+  if (!u.host.includes('.') && u.hostname !== 'localhost') return null;
+  return u;
+}
+
 function isAssetPath(pathname) {
   const lastDot = pathname.lastIndexOf('.');
   if (lastDot < 0) return false;
@@ -190,75 +236,50 @@ function isAssetPath(pathname) {
 function extractInternalLinks(html, currentUrl, origin) {
   const found = new Set();
   for (const match of html.matchAll(HREF_RE)) {
-    const raw = match[1];
+    // An href inside HTML escapes its ampersands: /p?a=1&amp;b=2 is /p?a=1&b=2.
+    const raw = match[1].trim().replace(/&amp;/g, '&');
     if (!raw || raw.startsWith('#')) continue;
     if (raw.startsWith('mailto:') || raw.startsWith('tel:') || raw.startsWith('javascript:')) continue;
     const resolved = (() => {
-      try { return new URL(raw, currentUrl); } catch { return null; }
+      try { return normalizeUrl(new URL(raw, currentUrl)); } catch { return null; }
     })();
     if (!resolved) continue;
-    if (resolved.protocol !== 'http:' && resolved.protocol !== 'https:') continue;
-    if (`${resolved.protocol}//${resolved.host}` !== origin) continue;
+    if (resolved.origin !== origin) continue;
     if (isAssetPath(resolved.pathname)) continue;
-    resolved.hash = '';
     found.add(resolved.href);
   }
-  return [...found];
+  return [...found].sort();
 }
 
 /**
- * @returns {Promise<{ status: number, body: string, title: string | null } | null>}
+ * GET a page, following redirects. Returns null on a transport error.
+ *
+ * @returns {Promise<{ url: string, status: number, isHtml: boolean, body: string, lastModified: string | null } | null>}
  */
-function fetchHtml(url, { timeoutMs, userAgent }) {
-  const parsed = (() => { try { return new URL(url); } catch { return null; } })();
-  if (!parsed) return Promise.resolve(null);
-  const lib = parsed.protocol === 'https:' ? https : http;
-  return new Promise((resolve) => {
-    const req = lib.request(
-      {
-        method: 'GET',
-        protocol: parsed.protocol,
-        hostname: parsed.hostname,
-        port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
-        path: `${parsed.pathname || '/'}${parsed.search || ''}`,
-        headers: {
-          'User-Agent': userAgent,
-          Accept: 'text/html, */*',
-          'Accept-Encoding': 'identity',
-        },
-      },
-      (res) => {
-        const status = res.statusCode ?? 0;
-        const ctype = String(res.headers['content-type'] || '').toLowerCase();
-        const lastModified = parseLastModified(res.headers['last-modified']);
-        if (status < 200 || status >= 300 || !ctype.includes('html')) {
-          res.resume();
-          resolve({ status, body: '', title: null, lastModified });
-          return;
-        }
-        let buffered = '';
-        res.setEncoding('utf8');
-        res.on('data', (chunk) => {
-          buffered += chunk;
-          // Cap the buffer at ~512 KB — sitemap building doesn't need more.
-          if (buffered.length > 512 * 1024) {
-            res.destroy();
-          }
-        });
-        res.on('end', () => {
-          resolve({
-            status,
-            body: buffered,
-            title: extractTitle(buffered),
-            lastModified,
-          });
-        });
-      },
-    );
-    req.setTimeout(timeoutMs, () => req.destroy());
-    req.on('error', () => resolve(null));
-    req.end();
-  });
+async function fetchHtml(url, { timeoutMs, userAgent, doFetch }) {
+  let res;
+  try {
+    res = await doFetch(url, {
+      headers: { 'user-agent': userAgent, accept: 'text/html, */*' },
+      redirect: 'follow',
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch {
+    return null;
+  }
+  const status = res.status;
+  const ctype = String(res.headers.get('content-type') || '').toLowerCase();
+  const lastModified = parseLastModified(res.headers.get('last-modified'));
+  const isHtml = status >= 200 && status < 300 && ctype.includes('html');
+  let body = '';
+  if (isHtml) {
+    try {
+      body = (await res.text()).slice(0, MAX_BODY_CHARS);
+    } catch {
+      return null;
+    }
+  }
+  return { url: res.url || url, status, isHtml, body, lastModified };
 }
 
 function extractTitle(body) {
@@ -267,21 +288,24 @@ function extractTitle(body) {
   return match[1].replace(/\s+/g, ' ').trim() || null;
 }
 
+// HTTP dates (RFC 1123, RFC 850, asctime) all start with a day name.
+const HTTP_DATE_RE = /^[A-Za-z]{3}/;
+
 /**
  * Parse a `Last-Modified` HTTP header into the ISO-8601 date string
  * sitemaps.org expects in `<lastmod>`. Sites serve this header in RFC
- * 1123 format (e.g. `Wed, 21 Oct 2026 07:28:00 GMT`); we accept anything
- * `Date` can parse and emit `YYYY-MM-DD`. Returns null on failure.
+ * 1123 format (e.g. `Wed, 21 Oct 2026 07:28:00 GMT`); anything that is not
+ * an HTTP date returns null. Emits the UTC `YYYY-MM-DD`.
  *
- * @param {string | string[] | undefined} raw
+ * @param {string | string[] | null | undefined} raw
  * @returns {string | null}
  */
 function parseLastModified(raw) {
   const value = Array.isArray(raw) ? raw[0] : raw;
-  if (!value || typeof value !== 'string') return null;
+  if (!value || typeof value !== 'string' || !HTTP_DATE_RE.test(value.trim())) return null;
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return null;
-  // Use the date part only — sitemaps.org accepts both YYYY-MM-DD and
+  // Use the date part only: sitemaps.org accepts both YYYY-MM-DD and
   // full ISO timestamps; the date form is concise and avoids advertising
   // false precision.
   return parsed.toISOString().slice(0, 10);
@@ -290,6 +314,7 @@ function parseLastModified(raw) {
 export const _internals = {
   extractInternalLinks,
   normalizeUrl,
+  normalizeStartUrl,
   isAssetPath,
   extractTitle,
   parseLastModified,

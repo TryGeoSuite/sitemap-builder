@@ -1,22 +1,24 @@
 // "Sitemap Builder" — hosted free tool (Cloudflare Worker).
 //
-// ⚠️ This is the CAPPED edge version: a small BFS crawl (≤40 pages, depth ≤2)
-// using the platform `fetch`, to stay under the Workers subrequest/time limits.
-// The package's full crawler (src/crawler.js) uses node:http and isn't
-// Worker-compatible, so the crawl is reimplemented here with `fetch`; only the
-// pure renderSitemapXml() is reused. For a complete crawl of a large site, use
-// the CLI: `npx @geosuite/sitemap-builder <url>`.
+// It runs the package's own crawler (src/crawler.js, platform `fetch`) and
+// renderSitemapXml(), with the GeoSuite platform's crawl settings (depth 3,
+// 6 parallel fetches, 6 s per page, 25 s budget) and one difference: at most
+// 40 pages, to stay under the Workers subrequest limit. For the same site the
+// page gives the same sitemap.xml as the platform's Sitemap Builder run with
+// "Max pages" 40. For a bigger crawl, use the CLI:
+// `npx @geosuite/sitemap-builder <url>`.
 //
 // Routes:
 //   GET /                   → the page, locale from Accept-Language (it → Italian)
 //   GET /en  /it            → the page in that locale
-//   GET /api/crawl?url=...   → { site, count, capped, xml, error }
+//   GET /api/crawl?url=...   → { site, count, capped, hitDeadline, xml, error }
 //   GET /og.png              → Open Graph share image
 //   GET /favicon.png  /favicon.ico  /favicon.svg  /apple-touch-icon.png
 //                            → GeoSuite's favicon (PNG; /favicon.svg is the old
 //                              path, kept so cached links still get an icon)
 //   GET /logos/{chatgpt,gemini,perplexity}.svg → engine logos for the CTA
 
+import { crawlSite } from '../src/crawler.js';
 import { renderSitemapXml } from '../src/sitemap.js';
 import { renderPage } from './page.js';
 import OG_PNG from './og.png'; // bundled as ArrayBuffer via the wrangler "Data" rule
@@ -40,79 +42,31 @@ function pickLang(request, path) {
   return first.startsWith('it') ? 'it' : 'en';
 }
 
+// The platform's defaults (sitemap_builder_service.py), except the page cap.
 const MAX_PAGES = 40;
-const MAX_DEPTH = 2;
+const MAX_DEPTH = 3;
+const CONCURRENCY = 6;
 const TIMEOUT_MS = 6000;
+const BUDGET_MS = 25_000;
 const UA = 'sitemap-builder-web/1.0 (+https://github.com/TryGeoSuite/sitemap-builder)';
-const SKIP_EXT = /\.(?:png|jpe?g|gif|svg|webp|ico|css|js|mjs|json|xml|txt|pdf|zip|gz|mp4|webm|mp3|woff2?|ttf|eot)(?:$|\?)/i;
-
-function extractLinks(html, base, origin) {
-  const out = new Set();
-  const re = /href\s*=\s*["']([^"']+)["']/gi;
-  let m;
-  while ((m = re.exec(html))) {
-    const href = m[1].trim();
-    if (!href || /^(mailto:|tel:|javascript:|#|data:)/i.test(href)) continue;
-    let abs;
-    try {
-      abs = new URL(href, base);
-    } catch {
-      continue;
-    }
-    if (abs.protocol !== 'http:' && abs.protocol !== 'https:') continue;
-    if (abs.origin !== origin) continue;
-    if (SKIP_EXT.test(abs.pathname)) continue;
-    abs.hash = '';
-    out.add(abs.toString());
-  }
-  return out;
-}
 
 async function crawl(input) {
-  let start;
+  let result;
   try {
-    start = new URL(/^https?:\/\//i.test(input) ? input : 'https://' + input);
+    result = await crawlSite(input, {
+      maxPages: MAX_PAGES,
+      maxDepth: MAX_DEPTH,
+      concurrency: CONCURRENCY,
+      perPageTimeoutMs: TIMEOUT_MS,
+      deadlineMs: Date.now() + BUDGET_MS,
+      userAgent: UA,
+    });
   } catch {
     return { error: 'Please enter a valid URL.' };
   }
-  if (start.protocol !== 'http:' && start.protocol !== 'https:') {
-    return { error: 'Please enter an http(s) URL.' };
-  }
-  const origin = start.origin;
-  start.hash = '';
-
-  const seen = new Set([start.toString()]);
-  const queue = [{ url: start.toString(), depth: 0 }];
-  const pages = [];
-
-  while (queue.length && pages.length < MAX_PAGES) {
-    const { url, depth } = queue.shift();
-    let html = '';
-    try {
-      const res = await fetch(url, {
-        headers: { 'user-agent': UA, accept: 'text/html,*/*' },
-        redirect: 'follow',
-        signal: AbortSignal.timeout(TIMEOUT_MS),
-      });
-      if (!res.ok) continue;
-      if (!(res.headers.get('content-type') || '').toLowerCase().includes('html')) continue;
-      pages.push({ url });
-      if (depth < MAX_DEPTH) html = await res.text();
-    } catch {
-      continue;
-    }
-    if (!html) continue;
-    for (const link of extractLinks(html, url, origin)) {
-      if (!seen.has(link) && seen.size < MAX_PAGES * 5) {
-        seen.add(link);
-        queue.push({ url: link, depth: depth + 1 });
-      }
-    }
-  }
-
-  const capped = queue.length > 0 || pages.length >= MAX_PAGES;
-  const xml = renderSitemapXml(pages.map((p) => ({ url: p.url })));
-  return { site: origin, count: pages.length, capped, xml, error: null };
+  const { origin, pages, hitCap, hitDeadline } = result;
+  const xml = renderSitemapXml(pages.map((p) => ({ url: p.url, lastmod: p.lastModified || undefined })));
+  return { site: origin, count: pages.length, capped: hitCap || hitDeadline, hitDeadline, xml, error: null };
 }
 
 const JSON_HEADERS = {

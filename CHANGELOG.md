@@ -5,6 +5,28 @@ All notable changes to `@geosuite/sitemap-builder` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Same results as the GeoSuite platform's Sitemap Builder, checked by golden
+  cases both repos run (`test/fixtures/golden-sitemap.json`, `test/golden.test.js`).
+- The crawler uses `fetch` instead of `node:http`, so the hosted page runs the
+  package's own `crawlSite()` instead of a separate copy.
+- Redirects are followed and pages are listed at their final URL; a start URL
+  redirecting to another host (apex to `www`) moves the crawl there.
+- Only 2xx HTML pages go in the sitemap: 404s, 500s and non-HTML responses no
+  longer do.
+- Links are normalized (lowercase host, no default port, `&amp;` decoded) and
+  followed in sorted order; pages are sorted by depth, then by URL in code-point
+  order (it was locale order).
+- `<lastmod>` accepts only HTTP dates and is the UTC date.
+- `crawlSite()` accepts a bare domain and returns the `origin` it crawled;
+  `--respect-robots` follows `Allow` rules and groups of several `User-agent`
+  lines (longest match wins, `Allow` on a tie).
+- Hosted page: depth 3 (was 2), the platform's timeouts and budget, and
+  `<lastmod>` in the output; still at most 40 pages.
+
 ## [0.3.2] - 2026-05-23
 
 ### Changed

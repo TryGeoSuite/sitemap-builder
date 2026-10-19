@@ -44,7 +44,7 @@
     "CHANGELOG.md"
   ],
   "scripts": {
-    "lint": "node --check src/index.js && node --check src/crawler.js && node --check src/sitemap.js && node --check src/ai.js && node --check bin/cli.js && node --check test/test-sitemap.js && node --check test/test-crawler.js && node --check test/test-ai.js",
+    "lint": "node --check src/index.js && node --check src/crawler.js && node --check src/robots.js && node --check src/sitemap.js && node --check src/ai.js && node --check bin/cli.js && node --check test/test-sitemap.js && node --check test/test-crawler.js && node --check test/test-ai.js && node --check test/golden.test.js && node --check test/golden-run.js && node --check scripts/update-golden.mjs",
     "test": "node --test test/*.js",
     "coverage": "node --experimental-test-coverage --test test/*.js"
   },

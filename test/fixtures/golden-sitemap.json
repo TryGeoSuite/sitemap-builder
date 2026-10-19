@@ -1,0 +1,675 @@
+{
+  "about": "Golden cases for the sitemap crawl, shared by TryGeoSuite/sitemap-builder (test/fixtures/golden-sitemap.json, run by test/golden.test.js) and the GeoSuite platform (geo: backend/tests/fixtures/golden-sitemap.json, run by backend/tests/tools/test_sitemap_builder_golden.py). The two files must stay identical. crawl cases run with concurrency 1 against the `site` map: a URL not in it answers 404, `location` redirects, everything else is served with its status, content_type (default text/html), last_modified and body. After an intended change: node scripts/update-golden.mjs in the package, review the diff, copy the file to geo, make the Python side pass.",
+  "start_url": [
+    {
+      "name": "bare domain gets https",
+      "input": "example.com",
+      "expected": "https://example.com/"
+    },
+    {
+      "name": "spaces trimmed, host lowercased, default port and fragment dropped",
+      "input": " https://Example.COM:443/Path?q=1#top ",
+      "expected": "https://example.com/Path?q=1"
+    },
+    {
+      "name": "other port kept",
+      "input": "http://example.com:8080/x",
+      "expected": "http://example.com:8080/x"
+    },
+    {
+      "name": "localhost with a port",
+      "input": "localhost:3000",
+      "expected": "https://localhost:3000/"
+    },
+    {
+      "name": "host without a dot",
+      "input": "intranet",
+      "expected": null
+    },
+    {
+      "name": "not http",
+      "input": "ftp://example.com/",
+      "expected": null
+    },
+    {
+      "name": "spaces inside",
+      "input": "not a url",
+      "expected": null
+    },
+    {
+      "name": "empty",
+      "input": "",
+      "expected": null
+    }
+  ],
+  "links": [
+    {
+      "name": "same origin only, normalized and sorted",
+      "current_url": "https://example.com/blog/post",
+      "origin": "https://example.com",
+      "html": "<a href=\"/zeta\">x</a><a href=\"../sibling\">x</a><a href=\"?q=1\">x</a><a href=\"//example.com/proto-relative\">x</a><a href=\"  /spaced  \">x</a><a href=\"/a b\">x</a><a href=\"/x#frag\">x</a><a href=\"#only\">x</a><a href=\"javascript:void(0)\">x</a><a href=\"/style.CSS\">x</a><a href=\"/path-with.dot/in-segment\">x</a><a href=\"http://example.com/other-scheme\">x</a><a href=\"/p?q=a b&amp;c=d\">x</a><a href=\"/über\">x</a><a href=\"https://example.com:443/port\">x</a><a href=\"/%7Euser\">x</a><a href=\"/a|b\">x</a><a href=\"./\">x</a><a href=\"https://other.com/\">x</a><a href=\"tel:+390000\">x</a><a href=\"/About\">x</a><link href=\"/not-an-anchor\"><A HREF='/upper-tag'>u</A>",
+      "expected": [
+        "https://example.com/%7Euser",
+        "https://example.com/%C3%BCber",
+        "https://example.com/About",
+        "https://example.com/a%20b",
+        "https://example.com/a|b",
+        "https://example.com/blog/",
+        "https://example.com/blog/post?q=1",
+        "https://example.com/p?q=a%20b&c=d",
+        "https://example.com/path-with.dot/in-segment",
+        "https://example.com/port",
+        "https://example.com/proto-relative",
+        "https://example.com/sibling",
+        "https://example.com/spaced",
+        "https://example.com/upper-tag",
+        "https://example.com/x",
+        "https://example.com/zeta"
+      ]
+    },
+    {
+      "name": "nothing to follow",
+      "current_url": "https://example.com/",
+      "origin": "https://example.com",
+      "html": "<p>no links</p>",
+      "expected": []
+    }
+  ],
+  "last_modified": [
+    {
+      "name": "RFC 1123",
+      "header": "Wed, 21 Oct 2026 07:28:00 GMT",
+      "expected": "2026-10-21"
+    },
+    {
+      "name": "offset converted to UTC",
+      "header": "Thu, 22 Oct 2026 01:30:00 +0200",
+      "expected": "2026-10-21"
+    },
+    {
+      "name": "ISO date is not an HTTP date",
+      "header": "2026-10-21",
+      "expected": null
+    },
+    {
+      "name": "garbage",
+      "header": "garbage",
+      "expected": null
+    },
+    {
+      "name": "missing",
+      "header": null,
+      "expected": null
+    }
+  ],
+  "render": [
+    {
+      "name": "loc escaped, lastmod only when present",
+      "pages": [
+        {
+          "url": "https://example.com/"
+        },
+        {
+          "url": "https://example.com/p?a=1&b=<2>",
+          "lastmod": "2026-10-21"
+        },
+        {
+          "url": ""
+        }
+      ],
+      "expected": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n  <url>\n    <loc>https://example.com/</loc>\n  </url>\n  <url>\n    <loc>https://example.com/p?a=1&amp;b=&lt;2&gt;</loc>\n    <lastmod>2026-10-21</lastmod>\n  </url>\n</urlset>\n"
+    },
+    {
+      "name": "no pages",
+      "pages": [],
+      "expected": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n</urlset>\n"
+    }
+  ],
+  "robots": [
+    {
+      "name": "consecutive user-agent lines share a group",
+      "agent": "*",
+      "robots_txt": "User-agent: *\nUser-agent: Googlebot\nDisallow: /private\n",
+      "paths": [
+        "/private/x",
+        "/public"
+      ],
+      "expected": {
+        "/private/x": false,
+        "/public": true
+      }
+    },
+    {
+      "name": "longest match wins, Allow on a tie",
+      "agent": "*",
+      "robots_txt": "User-agent: *\nDisallow: /shop\nAllow: /shop/public\nDisallow: /page\nAllow: /page\n",
+      "paths": [
+        "/shop/x",
+        "/shop/public/a",
+        "/page",
+        "/pages"
+      ],
+      "expected": {
+        "/shop/x": false,
+        "/shop/public/a": true,
+        "/page": true,
+        "/pages": true
+      }
+    },
+    {
+      "name": "wildcards and end anchor",
+      "agent": "*",
+      "robots_txt": "User-agent: *\nDisallow: /*.pdf$\nDisallow: /*?\nDisallow: /tmp*/cache\n",
+      "paths": [
+        "/a/b.pdf",
+        "/a/b.pdfx",
+        "/tmp1/cache/x",
+        "/tmp/x"
+      ],
+      "expected": {
+        "/a/b.pdf": false,
+        "/a/b.pdfx": true,
+        "/tmp1/cache/x": false,
+        "/tmp/x": true
+      }
+    },
+    {
+      "name": "empty Disallow allows everything",
+      "agent": "*",
+      "robots_txt": "User-agent: *\nDisallow:\n",
+      "paths": [
+        "/",
+        "/anything"
+      ],
+      "expected": {
+        "/": true,
+        "/anything": true
+      }
+    },
+    {
+      "name": "a group for another bot does not apply to *",
+      "agent": "*",
+      "robots_txt": "User-agent: GPTBot\nDisallow: /\n",
+      "paths": [
+        "/",
+        "/x"
+      ],
+      "expected": {
+        "/": true,
+        "/x": true
+      }
+    },
+    {
+      "name": "named agent group wins over *",
+      "agent": "GPTBot",
+      "robots_txt": "User-agent: *\nDisallow: /\n\nUser-agent: gptbot\nAllow: /\nDisallow: /secret\n",
+      "paths": [
+        "/",
+        "/secret/a"
+      ],
+      "expected": {
+        "/": true,
+        "/secret/a": false
+      }
+    },
+    {
+      "name": "percent-encoding is decoded on both sides",
+      "agent": "*",
+      "robots_txt": "User-agent: *\nDisallow: /caf%C3%A9\n",
+      "paths": [
+        "/café/menu",
+        "/caf%C3%A9/menu",
+        "/cafe"
+      ],
+      "expected": {
+        "/café/menu": false,
+        "/caf%C3%A9/menu": false,
+        "/cafe": true
+      }
+    },
+    {
+      "name": "rules before any user-agent are ignored, comments stripped",
+      "agent": "*",
+      "robots_txt": "Disallow: /early\n# comment\nUser-agent: * # everyone\nDisallow: /late # trailing\n",
+      "paths": [
+        "/early",
+        "/late"
+      ],
+      "expected": {
+        "/early": true,
+        "/late": false
+      }
+    },
+    {
+      "name": "the first * group with a matching rule decides",
+      "agent": "*",
+      "robots_txt": "User-agent: *\nDisallow: /a\n\nUser-agent: *\nAllow: /a/b\n",
+      "paths": [
+        "/a/b",
+        "/a/c"
+      ],
+      "expected": {
+        "/a/b": false,
+        "/a/c": false
+      }
+    },
+    {
+      "name": "non-rule lines do not split a group",
+      "agent": "*",
+      "robots_txt": "User-agent: bingbot\nCrawl-delay: 5\nUser-agent: *\nDisallow: /x\nSitemap: https://example.com/sitemap.xml\n",
+      "paths": [
+        "/x",
+        "/y"
+      ],
+      "expected": {
+        "/x": false,
+        "/y": true
+      }
+    }
+  ],
+  "crawl": [
+    {
+      "name": "redirect to www, final URLs, only 2xx HTML, depth cap",
+      "start_url": "example.com",
+      "max_pages": 100,
+      "max_depth": 3,
+      "respect_robots": false,
+      "site": {
+        "https://example.com/": {
+          "status": 301,
+          "location": "https://www.example.com/"
+        },
+        "https://www.example.com/": {
+          "body": "<html><head><title> Home \n page </title></head><body><a href=\"/about\">x</a><a href=\"/about#team\">x</a><a href=\"/old-page\">x</a><a href=\"/new-page\">x</a><a href=\"/missing\">x</a><a href=\"/files/report\">x</a><a href=\"/logo.png\">x</a><a href=\"https://other.com/x\">x</a><a href=\"/p?a=1&amp;b=2\">x</a><a href=\"/Blog/../blog/\">x</a><a href=\"mailto:hi@example.com\">x</a><a href=\"HTTPS://WWW.EXAMPLE.COM:443/contact\">x</a><a href=\"/café\">x</a></body></html>",
+          "last_modified": "Wed, 21 Oct 2026 07:28:00 GMT"
+        },
+        "https://www.example.com/about": {
+          "body": "<title>About</title><a href=\"/\">home</a><a href=\"/deep/one\">deep</a>"
+        },
+        "https://www.example.com/old-page": {
+          "status": 301,
+          "location": "/new-page"
+        },
+        "https://www.example.com/new-page": {
+          "body": "<title>New</title>"
+        },
+        "https://www.example.com/files/report": {
+          "status": 200,
+          "content_type": "application/pdf",
+          "body": "%PDF"
+        },
+        "https://www.example.com/p?a=1&b=2": {
+          "body": "<title>Query</title>"
+        },
+        "https://www.example.com/Blog/": {
+          "body": "<title>Wrong case</title>"
+        },
+        "https://www.example.com/blog/": {
+          "body": "<title>Blog</title><a href=\"post-1\">p</a>"
+        },
+        "https://www.example.com/blog/post-1": {
+          "body": "<title>Post 1</title>"
+        },
+        "https://www.example.com/contact": {
+          "body": "<title>Contact</title><a href=\"https://example.com/elsewhere\">apex</a>"
+        },
+        "https://www.example.com/caf%C3%A9": {
+          "body": "<title>Caf&eacute;</title>"
+        },
+        "https://www.example.com/deep/one": {
+          "body": "<a href=\"/deep/two\">2</a>"
+        },
+        "https://www.example.com/deep/two": {
+          "body": "<a href=\"/deep/three\">3</a>"
+        },
+        "https://www.example.com/deep/three": {
+          "body": "<title>Too deep</title>"
+        }
+      },
+      "expected": {
+        "origin": "https://www.example.com",
+        "pages": [
+          {
+            "url": "https://www.example.com/",
+            "depth": 0,
+            "status": 200,
+            "title": "Home page",
+            "last_modified": "2026-10-21"
+          },
+          {
+            "url": "https://www.example.com/about",
+            "depth": 1,
+            "status": 200,
+            "title": "About",
+            "last_modified": null
+          },
+          {
+            "url": "https://www.example.com/blog/",
+            "depth": 1,
+            "status": 200,
+            "title": "Blog",
+            "last_modified": null
+          },
+          {
+            "url": "https://www.example.com/caf%C3%A9",
+            "depth": 1,
+            "status": 200,
+            "title": "Caf&eacute;",
+            "last_modified": null
+          },
+          {
+            "url": "https://www.example.com/contact",
+            "depth": 1,
+            "status": 200,
+            "title": "Contact",
+            "last_modified": null
+          },
+          {
+            "url": "https://www.example.com/new-page",
+            "depth": 1,
+            "status": 200,
+            "title": "New",
+            "last_modified": null
+          },
+          {
+            "url": "https://www.example.com/p?a=1&b=2",
+            "depth": 1,
+            "status": 200,
+            "title": "Query",
+            "last_modified": null
+          },
+          {
+            "url": "https://www.example.com/blog/post-1",
+            "depth": 2,
+            "status": 200,
+            "title": "Post 1",
+            "last_modified": null
+          },
+          {
+            "url": "https://www.example.com/deep/one",
+            "depth": 2,
+            "status": 200,
+            "title": null,
+            "last_modified": null
+          },
+          {
+            "url": "https://www.example.com/deep/two",
+            "depth": 3,
+            "status": 200,
+            "title": null,
+            "last_modified": null
+          }
+        ],
+        "hit_page_cap": false,
+        "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n  <url>\n    <loc>https://www.example.com/</loc>\n    <lastmod>2026-10-21</lastmod>\n  </url>\n  <url>\n    <loc>https://www.example.com/about</loc>\n  </url>\n  <url>\n    <loc>https://www.example.com/blog/</loc>\n  </url>\n  <url>\n    <loc>https://www.example.com/caf%C3%A9</loc>\n  </url>\n  <url>\n    <loc>https://www.example.com/contact</loc>\n  </url>\n  <url>\n    <loc>https://www.example.com/new-page</loc>\n  </url>\n  <url>\n    <loc>https://www.example.com/p?a=1&amp;b=2</loc>\n  </url>\n  <url>\n    <loc>https://www.example.com/blog/post-1</loc>\n  </url>\n  <url>\n    <loc>https://www.example.com/deep/one</loc>\n  </url>\n  <url>\n    <loc>https://www.example.com/deep/two</loc>\n  </url>\n</urlset>\n"
+      }
+    },
+    {
+      "name": "page cap",
+      "start_url": "https://shop.it",
+      "max_pages": 3,
+      "max_depth": 3,
+      "respect_robots": false,
+      "site": {
+        "https://shop.it/": {
+          "body": "<a href=\"/a\">a</a><a href=\"/b\">b</a><a href=\"/c\">c</a><a href=\"/d\">d</a>"
+        },
+        "https://shop.it/a": {
+          "body": "<a href=\"/a\">a</a><a href=\"/b\">b</a><a href=\"/c\">c</a><a href=\"/d\">d</a>"
+        },
+        "https://shop.it/b": {
+          "body": "<a href=\"/a\">a</a><a href=\"/b\">b</a><a href=\"/c\">c</a><a href=\"/d\">d</a>"
+        },
+        "https://shop.it/c": {
+          "body": "<a href=\"/a\">a</a><a href=\"/b\">b</a><a href=\"/c\">c</a><a href=\"/d\">d</a>"
+        },
+        "https://shop.it/d": {
+          "body": "<a href=\"/a\">a</a><a href=\"/b\">b</a><a href=\"/c\">c</a><a href=\"/d\">d</a>"
+        }
+      },
+      "expected": {
+        "origin": "https://shop.it",
+        "pages": [
+          {
+            "url": "https://shop.it/",
+            "depth": 0,
+            "status": 200,
+            "title": null,
+            "last_modified": null
+          },
+          {
+            "url": "https://shop.it/a",
+            "depth": 1,
+            "status": 200,
+            "title": null,
+            "last_modified": null
+          },
+          {
+            "url": "https://shop.it/b",
+            "depth": 1,
+            "status": 200,
+            "title": null,
+            "last_modified": null
+          }
+        ],
+        "hit_page_cap": true,
+        "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n  <url>\n    <loc>https://shop.it/</loc>\n  </url>\n  <url>\n    <loc>https://shop.it/a</loc>\n  </url>\n  <url>\n    <loc>https://shop.it/b</loc>\n  </url>\n</urlset>\n"
+      }
+    },
+    {
+      "name": "robots respected when asked",
+      "start_url": "https://site.it/",
+      "max_pages": 100,
+      "max_depth": 3,
+      "respect_robots": true,
+      "site": {
+        "https://site.it/robots.txt": {
+          "status": 200,
+          "content_type": "text/plain",
+          "body": "User-agent: *\nDisallow: /private\nAllow: /private/ok\n"
+        },
+        "https://site.it/": {
+          "body": "<a href=\"/private/a\">a</a><a href=\"/private/ok\">ok</a><a href=\"/public\">p</a>"
+        },
+        "https://site.it/private/a": {
+          "body": "secret"
+        },
+        "https://site.it/private/ok": {
+          "body": "fine"
+        },
+        "https://site.it/public": {
+          "body": "public"
+        }
+      },
+      "expected": {
+        "origin": "https://site.it",
+        "pages": [
+          {
+            "url": "https://site.it/",
+            "depth": 0,
+            "status": 200,
+            "title": null,
+            "last_modified": null
+          },
+          {
+            "url": "https://site.it/private/ok",
+            "depth": 1,
+            "status": 200,
+            "title": null,
+            "last_modified": null
+          },
+          {
+            "url": "https://site.it/public",
+            "depth": 1,
+            "status": 200,
+            "title": null,
+            "last_modified": null
+          }
+        ],
+        "hit_page_cap": false,
+        "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n  <url>\n    <loc>https://site.it/</loc>\n  </url>\n  <url>\n    <loc>https://site.it/private/ok</loc>\n  </url>\n  <url>\n    <loc>https://site.it/public</loc>\n  </url>\n</urlset>\n"
+      }
+    },
+    {
+      "name": "robots ignored when not asked",
+      "start_url": "https://site.it/",
+      "max_pages": 100,
+      "max_depth": 3,
+      "respect_robots": false,
+      "site": {
+        "https://site.it/robots.txt": {
+          "status": 200,
+          "content_type": "text/plain",
+          "body": "User-agent: *\nDisallow: /private\nAllow: /private/ok\n"
+        },
+        "https://site.it/": {
+          "body": "<a href=\"/private/a\">a</a><a href=\"/private/ok\">ok</a><a href=\"/public\">p</a>"
+        },
+        "https://site.it/private/a": {
+          "body": "secret"
+        },
+        "https://site.it/private/ok": {
+          "body": "fine"
+        },
+        "https://site.it/public": {
+          "body": "public"
+        }
+      },
+      "expected": {
+        "origin": "https://site.it",
+        "pages": [
+          {
+            "url": "https://site.it/",
+            "depth": 0,
+            "status": 200,
+            "title": null,
+            "last_modified": null
+          },
+          {
+            "url": "https://site.it/private/a",
+            "depth": 1,
+            "status": 200,
+            "title": null,
+            "last_modified": null
+          },
+          {
+            "url": "https://site.it/private/ok",
+            "depth": 1,
+            "status": 200,
+            "title": null,
+            "last_modified": null
+          },
+          {
+            "url": "https://site.it/public",
+            "depth": 1,
+            "status": 200,
+            "title": null,
+            "last_modified": null
+          }
+        ],
+        "hit_page_cap": false,
+        "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n  <url>\n    <loc>https://site.it/</loc>\n  </url>\n  <url>\n    <loc>https://site.it/private/a</loc>\n  </url>\n  <url>\n    <loc>https://site.it/private/ok</loc>\n  </url>\n  <url>\n    <loc>https://site.it/public</loc>\n  </url>\n</urlset>\n"
+      }
+    },
+    {
+      "name": "start disallowed by robots",
+      "start_url": "https://site.it/",
+      "max_pages": 100,
+      "max_depth": 3,
+      "respect_robots": true,
+      "site": {
+        "https://site.it/robots.txt": {
+          "status": 200,
+          "content_type": "text/plain",
+          "body": "User-agent: *\nDisallow: /\n"
+        },
+        "https://site.it/": {
+          "body": "<a href=\"/a\">a</a>"
+        }
+      },
+      "expected": {
+        "origin": "https://site.it",
+        "pages": [],
+        "hit_page_cap": false,
+        "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n</urlset>\n"
+      }
+    },
+    {
+      "name": "start page missing",
+      "start_url": "https://site.it/",
+      "max_pages": 100,
+      "max_depth": 3,
+      "respect_robots": false,
+      "site": {},
+      "expected": {
+        "origin": "https://site.it",
+        "pages": [],
+        "hit_page_cap": false,
+        "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n</urlset>\n"
+      }
+    },
+    {
+      "name": "depth 0 lists the start page only",
+      "start_url": "https://site.it/",
+      "max_pages": 100,
+      "max_depth": 0,
+      "respect_robots": false,
+      "site": {
+        "https://site.it/": {
+          "body": "<a href=\"/a\">a</a>"
+        },
+        "https://site.it/a": {
+          "body": "<a href=\"/b\">b</a>"
+        }
+      },
+      "expected": {
+        "origin": "https://site.it",
+        "pages": [
+          {
+            "url": "https://site.it/",
+            "depth": 0,
+            "status": 200,
+            "title": null,
+            "last_modified": null
+          }
+        ],
+        "hit_page_cap": false,
+        "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n  <url>\n    <loc>https://site.it/</loc>\n  </url>\n</urlset>\n"
+      }
+    },
+    {
+      "name": "a page redirecting off the site and a 500 are dropped",
+      "start_url": "https://site.it/",
+      "max_pages": 100,
+      "max_depth": 3,
+      "respect_robots": false,
+      "site": {
+        "https://site.it/": {
+          "body": "<a href=\"/x\">x</a><a href=\"/y\">y</a>"
+        },
+        "https://site.it/x": {
+          "status": 302,
+          "location": "https://elsewhere.com/x"
+        },
+        "https://site.it/y": {
+          "status": 500,
+          "body": "oops"
+        }
+      },
+      "expected": {
+        "origin": "https://site.it",
+        "pages": [
+          {
+            "url": "https://site.it/",
+            "depth": 0,
+            "status": 200,
+            "title": null,
+            "last_modified": null
+          }
+        ],
+        "hit_page_cap": false,
+        "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n  <url>\n    <loc>https://site.it/</loc>\n  </url>\n</urlset>\n"
+      }
+    }
+  ]
+}
