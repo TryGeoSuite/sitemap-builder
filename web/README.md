@@ -7,13 +7,14 @@ a sitemaps.org-compliant `sitemap.xml` to copy or download.
 - `GET /` — the page (`page.js`), bilingual **en/it** (auto-detected from `Accept-Language`; `/en` · `/it` force a locale)
 - `GET /og.png` · `GET /favicon.png` (also `/favicon.ico`, `/favicon.svg`, `/apple-touch-icon.png`) — Open Graph share image (1200×630) + GeoSuite's favicon
 - `GET /logos/{chatgpt,gemini,perplexity}.svg` — engine logos for the call to action
-- `GET /api/crawl?url=https://example.com` — `{ site, count, capped, xml }`
+- `GET /api/crawl?url=https://example.com`: `{ site, count, capped, hitDeadline, xml }`
 
-> ⚠️ **Capped edge version.** The crawl is a small BFS (≤40 pages, depth ≤2)
-> with the platform `fetch`, to stay under the Workers subrequest/time limits.
-> The package's full crawler (`src/crawler.js`) uses `node:http` and isn't
-> Worker-compatible, so the crawl is reimplemented here and only the pure
-> `renderSitemapXml()` is reused. **For a complete crawl, use the CLI:**
+> **Same crawler as the CLI and the platform.** The Worker runs the package's
+> `crawlSite()` (`src/crawler.js`, platform `fetch`) and `renderSitemapXml()`
+> with the GeoSuite platform's settings: depth 3, 6 parallel fetches, 6 s per
+> page, 25 s budget. The one difference is the page cap, 40, to stay under the
+> Workers subrequest limit: the platform's Sitemap Builder with "Max pages" 40
+> returns the same file. **For a bigger crawl, use the CLI:**
 > `npx @geosuite/sitemap-builder <url>`.
 
 ## Run locally
@@ -38,7 +39,7 @@ npx wrangler deploy
 ## Auto-deploy (CI)
 
 [`.github/workflows/deploy-web.yml`](../.github/workflows/deploy-web.yml)
-redeploys on every push to `main` touching `web/` or `src/sitemap.js`. Add two
+redeploys on every push to `main` touching `web/` or `src/`. Add two
 repo secrets (Settings → Secrets and variables → Actions):
 
 - `CLOUDFLARE_API_TOKEN` — token scoped **Edit Cloudflare Workers** from the
@@ -47,7 +48,7 @@ repo secrets (Settings → Secrets and variables → Actions):
 
 ## Notes
 
-- Zero deps, no `nodejs_compat`. The crawl uses the platform `fetch`; only
-  `renderSitemapXml()` is imported from the package.
+- Zero deps, no `nodejs_compat`: the crawler and the robots checker use the
+  platform `fetch` only.
 - This directory is **not** part of the npm package, so it never ships to
   registry consumers.

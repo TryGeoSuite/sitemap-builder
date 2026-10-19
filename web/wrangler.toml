@@ -10,8 +10,8 @@ rules = [
   { type = "Text", globs = ["**/*.svg"], fallthrough = false }
 ]
 
-# No nodejs_compat / npm install needed: the Worker reuses only the pure
-# renderSitemapXml() from ../src/sitemap.js and crawls with the platform fetch.
+# No nodejs_compat / npm install needed: the Worker reuses ../src/crawler.js,
+# ../src/robots.js and ../src/sitemap.js, which use only the platform fetch.
 #
 # ⚠️ Deploy to your PERSONAL / GeoSuite Cloudflare account — NOT the work/Cato
 # one (`wrangler whoami` to check). Pin it to be safe:

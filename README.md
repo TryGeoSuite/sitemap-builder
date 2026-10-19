@@ -80,16 +80,30 @@ geosuite-sitemap-builder https://example.com --json
 
 ## What it actually does
 
-1. Starts at the URL you pass.
-2. BFS-crawls **same-origin** `<a href>` links only (never wanders off the host).
-3. Drops obvious non-HTML extensions (`.png`, `.css`, `.pdf`, …) so the
+1. Starts at the URL you pass (a bare `example.com` is crawled over https).
+2. BFS-crawls **same-origin** `<a href>` links only (never wanders off the host),
+   in sorted order. Links are normalized the way a browser does: lowercase
+   host, no default port, no `#fragment`, `.`/`..` resolved, `&amp;` decoded,
+   path and query percent-encoded.
+3. Follows redirects and lists each page at its **final URL**. If the start URL
+   redirects to another host (`example.com` to `www.example.com`), the crawl
+   continues there; any other page that redirects off the site is dropped.
+4. Lists only pages that answer **2xx with HTML**: a 404, a 500 or a PDF
+   served without an extension stays out.
+5. Drops obvious non-HTML extensions (`.png`, `.css`, `.pdf`, …) so the
    sitemap doesn't get polluted with assets.
-4. Skips fragment-only links (`#section`), `mailto:`, `tel:`, and `javascript:`.
-5. Stops at any of three caps (whichever fires first):
+6. Skips fragment-only links (`#section`), `mailto:`, `tel:`, and `javascript:`.
+7. Stops at any of three caps (whichever fires first):
    - page count (`--max-pages`)
    - BFS depth (`--max-depth`)
    - wall-clock budget (`--budget-s`)
-6. Renders the discovered URLs as a sitemaps.org-compliant `<urlset>`.
+8. Renders the discovered URLs as a sitemaps.org-compliant `<urlset>`, by
+   depth and then by URL, with `<lastmod>` from the `Last-Modified` header
+   when the site sends one.
+
+The same rules run in the [GeoSuite](https://trygeosuite.it) platform's
+Sitemap Builder: both run the cases in `test/fixtures/golden-sitemap.json`, so
+for the same site and the same caps the two give the same sitemap.
 
 The output is intentionally minimal: `<loc>` plus an optional `<lastmod>`. We
 skip `<changefreq>` and `<priority>` — the spec deprecates them and the major
@@ -102,12 +116,12 @@ search engines have ignored them for years.
 - **JavaScript rendering**. The crawler is HTTP + regex. Single-page apps
   whose links only appear after client-side hydration won't be discovered.
   Build-time pre-rendering or an SSR layer is the right fix.
-- **Robots.txt awareness**. By default the tool runs against the site
-  owner's own domain and honoring `robots.txt` would silently strip the
-  pages they want to publish. (Adding an opt-in `--respect-robots` flag is
-  on the roadmap.)
-- **`<lastmod>` accuracy**. Today we don't fill `<lastmod>` from `Last-Modified`
-  response headers. Coming in 0.2.
+- **Robots.txt by default**. The tool runs against the site owner's own
+  domain, and honoring `robots.txt` would silently strip the pages they want
+  to publish. Pass `--respect-robots` to skip the paths disallowed for
+  `User-agent: *` (longest match wins, `Allow` on a tie).
+- **`<lastmod>` beyond the header**. `<lastmod>` comes only from the
+  `Last-Modified` response header; pages that don't send it get none.
 - **LLM-powered grouping or summaries**. The deterministic 0.1 ships without
   a network dependency on any model. An opt-in `--ai` mode is on the
   roadmap (provide `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` to enable).

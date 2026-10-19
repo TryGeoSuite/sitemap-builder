@@ -14,7 +14,7 @@ on:
     branches: [main]
     paths:
       - 'web/**'
-      - 'src/sitemap.js'
+      - 'src/**'
       - '.github/workflows/deploy-web.yml'
   workflow_dispatch: {}
 
