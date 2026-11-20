@@ -17,6 +17,10 @@ a sitemaps.org-compliant `sitemap.xml` to copy or download.
 > returns the same file. **For a bigger crawl, use the CLI:**
 > `npx @geosuite/sitemap-builder <url>`.
 
+The page sends anonymous usage statistics to PostHog (EU) in cookieless mode
+(`analytics()` in `theme.js`): the tool, the hostname of the site and the
+outcome, never the full URL.
+
 ## Run locally
 
 ```bash
