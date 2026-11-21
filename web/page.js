@@ -10,7 +10,7 @@
 //
 // Product names and "sitemap.xml" stay as-is; only prose/labels/buttons translate.
 
-import { FONTS, BASE_CSS, ENGINES } from './theme.js';
+import { FONTS, BASE_CSS, ENGINES, analytics, withSiteUtm } from './theme.js';
 
 const BASE = 'https://sitemap-builder.geosuite.workers.dev';
 const HUB = 'https://tools.trygeosuite.it';
@@ -18,6 +18,11 @@ const REPO = 'https://github.com/TryGeoSuite/sitemap-builder';
 const NPM = 'https://www.npmjs.com/package/@geosuite/sitemap-builder';
 const ANALYSIS = 'https://trygeosuite.it/analisi-gratuita?utm_source=geosuite-open&utm_medium=tool&utm_campaign=sitemap-builder';
 const CMD = 'npx @geosuite/sitemap-builder &lt;url&gt;';
+// The tool id in the usage statistics (theme.js analytics).
+const TOOL = 'sitemap_builder';
+// The campaign name the existing signup links already use: one name per tool
+// keeps a per-campaign report on one row.
+const CAMPAIGN = 'sitemap-builder';
 
 // Filled circle + white mark, colored by the surrounding state class. Always
 // next to a text label, never the only signal.
@@ -56,7 +61,7 @@ const S = {
     ctaTitle: 'Being found is step one. Being recommended is the goal.',
     ctaText: 'A sitemap.xml helps crawlers, AI ones included, find every page you want read. GeoSuite checks what happens next: it asks ChatGPT, Gemini and Perplexity the questions your customers really ask, and tells you where you appear, who wins instead and what to fix first. The report arrives by email.',
     ctaButton: 'Get the free analysis',
-    footer: `Open source (MIT) by <a href="https://github.com/matte97p">Matteo Perino</a>, maintained under <a href="https://trygeosuite.it">GeoSuite</a>, the Italian platform for AI visibility. Code on <a href="${REPO}">GitHub</a>, package on <a href="${NPM}">npm</a>.`,
+    footer: `Open source (MIT) by <a href="https://github.com/matte97p">Matteo Perino</a>, maintained under <a href="https://trygeosuite.it">GeoSuite</a>, the Italian platform for AI visibility. Code on <a href="${REPO}">GitHub</a>, package on <a href="${NPM}">npm</a>. Anonymous usage statistics with PostHog (EU), without cookies: of what you type, they include only the site’s hostname.`,
     // Strings read at runtime by the interactive crawl script.
     js: {
       crawling: 'Crawling',
@@ -99,7 +104,7 @@ const S = {
     ctaTitle: 'Farsi trovare è il primo passo. Farsi consigliare è l’obiettivo.',
     ctaText: 'Un sitemap.xml aiuta i crawler, anche quelli delle AI, a trovare tutte le pagine che vuoi far leggere. GeoSuite controlla cosa succede dopo: fa a ChatGPT, Gemini e Perplexity le domande che i tuoi clienti fanno davvero, e ti dice dove compari, chi vince al posto tuo e cosa correggere per primo. Il report arriva via mail.',
     ctaButton: 'Richiedi l’analisi gratuita',
-    footer: `Open source (MIT) di <a href="https://github.com/matte97p">Matteo Perino</a>, mantenuto da <a href="https://trygeosuite.it">GeoSuite</a>, la piattaforma italiana per la visibilità sulle AI. Codice su <a href="${REPO}">GitHub</a>, pacchetto su <a href="${NPM}">npm</a>.`,
+    footer: `Open source (MIT) di <a href="https://github.com/matte97p">Matteo Perino</a>, mantenuto da <a href="https://trygeosuite.it">GeoSuite</a>, la piattaforma italiana per la visibilità sulle AI. Codice su <a href="${REPO}">GitHub</a>, pacchetto su <a href="${NPM}">npm</a>. Statistiche d’uso anonime con PostHog (UE), senza cookie: di quello che scrivi includono solo il nome del sito.`,
     // Stringhe lette a runtime dallo script interattivo del crawl.
     js: {
       crawling: 'Esplorazione di',
@@ -121,7 +126,7 @@ const S = {
 export function renderPage(lang) {
   const t = S[lang] || S.en;
 
-  return `<!doctype html>
+  return withSiteUtm(`<!doctype html>
 <html lang="${lang}">
 <head>
 <meta charset="utf-8">
@@ -148,6 +153,7 @@ export function renderPage(lang) {
 <meta name="twitter:description" content="${t.desc}">
 <meta name="twitter:image" content="${BASE}/og.png">
 ${FONTS}
+${analytics(TOOL)}
 <style>
 ${BASE_CSS}
   .bar nav a { min-height:36px; }
@@ -239,7 +245,7 @@ ${BASE_CSS}
         <p>${t.ctaText}</p>
         ${ENGINES}
       </div>
-      <a class="primary" href="${ANALYSIS}" target="_blank" rel="noopener">${t.ctaButton}</a>
+      <a class="primary" href="${ANALYSIS}" target="_blank" rel="noopener" data-cta="analysis">${t.ctaButton}</a>
     </section>
   </main>
 
@@ -251,7 +257,16 @@ ${BASE_CSS}
   var out = document.getElementById('out');
   var input = document.getElementById('u');
   var btn = document.getElementById('go');
-  var lastText = '';
+  var lastText = '', lastHost = '';
+
+  // Usage statistics (theme.js analytics): never throws, never sends the URL.
+  function track(event, props){ try { if (window.gsTrack) window.gsTrack(event, props); } catch (e) {} }
+  function hostOf(url){ return window.gsTrack ? window.gsTrack.host(url) : ''; }
+  // The API's error is a sentence: send a code instead.
+  function errCode(msg){
+    msg = String(msg || '');
+    return /valid URL/i.test(msg) ? 'invalid_url' : /missing/i.test(msg) ? 'missing_url' : 'generic';
+  }
 
   function esc(s){ return String(s).replace(/[&<>"]/g, function(c){
     return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
@@ -281,6 +296,7 @@ ${BASE_CSS}
 
     document.getElementById('copy').addEventListener('click', function(){
       navigator.clipboard.writeText(lastText).then(function(){
+        track('tool_result_copied', { input_host: lastHost, content: 'sitemap_xml' });
         var b = document.getElementById('copy'); b.textContent = I18N.copied; setTimeout(function(){ b.textContent = I18N.copy; }, 1500);
       });
     });
@@ -288,28 +304,40 @@ ${BASE_CSS}
       var blob = new Blob([lastText], { type: 'application/xml' });
       var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'sitemap.xml';
       document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(a.href);
+      track('tool_file_downloaded', { input_host: lastHost, file: 'sitemap.xml' });
     });
   }
 
-  function run(url){
+  // source: 'form' (submitted) or 'shared_link' (a ?url= link re-runs it).
+  function run(url, source){
     if (!url) return;
+    var t0 = Date.now(), inputHost = hostOf(url);
+    lastHost = inputHost;
+    track('tool_run_started', { input_host: inputHost, source: source });
     btn.disabled = true;
     out.innerHTML = note('busy', I18N.crawling + ' ' + esc(url) + ' ' + I18N.crawlingTail);
     fetch('/api/crawl?url=' + encodeURIComponent(url))
       .then(function(res){ return res.json(); })
-      .then(function(r){ render(r); })
-      .catch(function(){ out.innerHTML = note('crit', I18N.networkError); })
+      .then(function(r){
+        if (r.error) track('tool_run_failed', { input_host: inputHost, error: errCode(r.error), duration_ms: Date.now() - t0 });
+        else track('tool_run_completed', { input_host: inputHost, duration_ms: Date.now() - t0, pages: r.count, capped: !!r.capped, hit_deadline: !!r.hitDeadline });
+        render(r);
+      })
+      .catch(function(){
+        track('tool_run_failed', { input_host: inputHost, error: 'network', duration_ms: Date.now() - t0 });
+        out.innerHTML = note('crit', I18N.networkError);
+      })
       .finally(function(){ btn.disabled = false; });
   }
 
   document.getElementById('f').addEventListener('submit', function(e){
     e.preventDefault();
     var url = input.value.trim();
-    if (url){ history.replaceState(null, '', '?url=' + encodeURIComponent(url)); run(url); }
+    if (url){ history.replaceState(null, '', '?url=' + encodeURIComponent(url)); run(url, 'form'); }
   });
 
   var shared = new URLSearchParams(location.search).get('url');
-  if (shared){ input.value = shared; run(shared); }
+  if (shared){ input.value = shared; run(shared, 'shared_link'); }
 </script>
 <script>
 (function () {
@@ -321,6 +349,7 @@ ${BASE_CSS}
     b.type = 'button'; b.className = 'ghost'; b.textContent = L.copy; b.setAttribute('aria-label', L.label);
     b.addEventListener('click', function () {
       navigator.clipboard.writeText(cmd).then(function () {
+        try { if (window.gsTrack) window.gsTrack('tool_result_copied', { content: 'cli_command' }); } catch (e) {}
         b.textContent = L.copied;
         setTimeout(function () { b.textContent = L.copy; }, 1200);
       }).catch(function () {});
@@ -330,5 +359,5 @@ ${BASE_CSS}
 })();
 </script>
 </body>
-</html>`;
+</html>`, CAMPAIGN);
 }
